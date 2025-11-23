@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>吊弦位置标记小车</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header>
+    <h1>吊弦位置标记小车</h1>
+    <div id="online-status" class="status offline">小车状态：离线</div>
+  </header>
+
+  <main>
+    <section class="grid-buttons">
+      <button data-modal="params-modal">参数设置</button>
+      <button data-modal="control-modal">小车控制</button>
+      <button data-modal="task-modal">任务数据</button>
+      <button data-modal="log-modal">工作日志</button>
+    </section>
+
+    <section class="car-stats">
+      <div class="stat"><span>车速：</span><strong id="car-speed">0.0 km/h</strong></div>
+      <div class="stat"><span>位置：</span><strong id="car-distance">DK000+000.00</strong></div>
+      <div class="stat"><span>开机时间：</span><strong id="car-uptime">00h00m</strong></div>
+      <div class="stat"><span>已标记吊弦数量：</span><strong id="car-dn">0</strong></div>
+      <div class="stat"><span>已标记跨距数量：</span><strong id="car-sn">0</strong></div>
+    </section>
+  </main>
+
+  <div class="modal" id="params-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>参数设置</h2>
+        <button class="close">×</button>
+      </div>
+      <div class="modal-body">
+        <label>两端吊弦位置（cm）：
+          <input type="number" id="input-side" placeholder="例如 500">
+        </label>
+        <label>跨内总吊弦数：
+          <input type="number" id="input-unm" placeholder="例如 6">
+        </label>
+        <button id="lock-button" class="primary">锁定并发送</button>
+        <p class="hint">锁定后会通过 MQTT 的 data 主题下发参数；仅在小车控制回到开始状态时允许解锁。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="control-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>小车控制</h2>
+        <button class="close">×</button>
+      </div>
+      <div class="modal-body" id="control-body"></div>
+    </div>
+  </div>
+
+  <div class="modal" id="task-modal">
+    <div class="modal-content wide">
+      <div class="modal-header">
+        <h2>任务数据</h2>
+        <button class="close">×</button>
+      </div>
+      <div class="modal-body" id="task-body"></div>
+    </div>
+  </div>
+
+  <div class="modal" id="log-modal">
+    <div class="modal-content wide">
+      <div class="modal-header">
+        <h2>工作日志</h2>
+        <button class="close">×</button>
+      </div>
+      <div class="modal-body" id="log-body"></div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
