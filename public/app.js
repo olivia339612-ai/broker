@@ -346,4 +346,4 @@ async function postJSON(url, data) {
 }
 
 fetchState();
-setInterval(fetchState, 1500);
+setInterval(fetchState, 100); // 每秒10次刷新
