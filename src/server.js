@@ -3,6 +3,91 @@ const fs = require('fs');
 const path = require('path');
 const net = require('net');
 const EventEmitter = require('events');
+const crypto = require('crypto');
+
+// 简单的会话管理
+const sessions = new Map();
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '0008';
+
+function generateSessionId() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+function createSession() {
+  const sessionId = generateSessionId();
+  const session = {
+    id: sessionId,
+    created: Date.now(),
+    lastAccess: Date.now()
+  };
+  sessions.set(sessionId, session);
+
+  // 清理过期会话（30分钟）
+  setTimeout(() => {
+    if (sessions.has(sessionId)) {
+      sessions.delete(sessionId);
+    }
+  }, 30 * 60 * 1000);
+
+  return sessionId;
+}
+
+function isValidSession(sessionId) {
+  const session = sessions.get(sessionId);
+  if (!session) return false;
+
+  // 检查会话是否过期（30分钟）
+  if (Date.now() - session.lastAccess > 30 * 60 * 1000) {
+    sessions.delete(sessionId);
+    return false;
+  }
+
+  session.lastAccess = Date.now();
+  return true;
+}
+
+function getSessionFromCookie(req) {
+  const cookies = req.headers.cookie || '';
+  const match = cookies.match(/sessionId=([^;]+)/);
+  return match ? match[1] : null;
+}
+
+// CSRF防护
+const csrfTokens = new Map();
+
+function generateCSRFToken(sessionId) {
+  const token = crypto.randomBytes(32).toString('hex');
+  csrfTokens.set(token, sessionId);
+
+  // 1小时后清理token
+  setTimeout(() => {
+    csrfTokens.delete(token);
+  }, 60 * 60 * 1000);
+
+  return token;
+}
+
+function validateCSRFToken(token, sessionId) {
+  return csrfTokens.get(token) === sessionId;
+}
+
+// 记录登录尝试
+function logLoginAttempt(ip, userAgent, success, reason = '') {
+  const timestamp = new Date().toISOString();
+  const logEntry = `[${timestamp}] Login ${success ? 'SUCCESS' : 'FAILED'} from ${ip} - ${reason} - ${userAgent}\n`;
+
+  // 简单的日志记录，生产环境建议使用更完善的日志系统
+  console.log(logEntry);
+}
+
+// 获取客户端IP
+function getClientIP(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) {
+    return forwarded.split(',')[0];
+  }
+  return req.connection.remoteAddress || req.socket.remoteAddress || 'unknown';
+}
 
 class SimpleMQTTClient extends EventEmitter {
   constructor(options) {
@@ -394,6 +479,59 @@ function getStatePayload() {
 }
 
 function handleApiRequest(req, res, body) {
+  // 登录API - 不需要身份验证
+  if (req.method === 'POST' && req.url === '/api/login') {
+    const clientIP = getClientIP(req);
+    const userAgent = req.headers['user-agent'] || 'unknown';
+    const password = body.password || '';
+    const csrfToken = body.csrfToken || '';
+
+    // 基本输入验证
+    if (!password) {
+      logLoginAttempt(clientIP, userAgent, false, 'empty password');
+      return jsonResponse(res, 400, { success: false, error: '请输入密码' });
+    }
+
+    // 防止暴力破解 - 密码长度限制
+    if (password.length > 100) {
+      logLoginAttempt(clientIP, userAgent, false, 'password too long');
+      return jsonResponse(res, 400, { success: false, error: '密码格式错误' });
+    }
+
+    // 简化CSRF验证：对于登录，我们主要依赖其他安全措施
+    // CSRF token主要用于后续的已认证请求
+
+    if (password === ADMIN_PASSWORD) {
+      const sessionId = createSession();
+      res.setHeader('Set-Cookie', `sessionId=${sessionId}; HttpOnly; Path=/; Max-Age=1800; SameSite=Strict`);
+      logLoginAttempt(clientIP, userAgent, true, 'successful login');
+      return jsonResponse(res, 200, { success: true, message: '登录成功' });
+    } else {
+      logLoginAttempt(clientIP, userAgent, false, 'incorrect password');
+      // 延迟响应，防止暴力破解
+      setTimeout(() => {
+        jsonResponse(res, 401, { success: false, error: '用户名或密码错误' });
+      }, 1000);
+      return;
+    }
+  }
+
+  // 登出API
+  if (req.method === 'POST' && req.url === '/api/logout') {
+    const sessionId = getSessionFromCookie(req);
+    if (sessionId && sessions.has(sessionId)) {
+      sessions.delete(sessionId);
+    }
+    res.setHeader('Set-Cookie', 'sessionId=; HttpOnly; Path=/; Max-Age=0');
+    return jsonResponse(res, 200, { success: true, message: '已退出登录' });
+  }
+
+  // 检查会话验证（除了登录和登出API外的所有API）
+  const sessionId = getSessionFromCookie(req);
+  if (!isValidSession(sessionId)) {
+    return jsonResponse(res, 401, { error: '请先登录' });
+  }
+
   if (req.method === 'GET' && req.url === '/api/state') {
     return jsonResponse(res, 200, getStatePayload());
   }
@@ -488,12 +626,51 @@ const server = http.createServer((req, res) => {
       handleApiRequest(req, res, parsed);
     });
   } else {
+    // 登录页面 - 无需身份验证
+    if (req.url === '/login' || req.url === '/login.html') {
+      const loginPath = path.join(__dirname, '../public/login.html');
+
+      // 为登录页面生成CSRF token
+      const tempSessionId = generateSessionId();
+      const csrfToken = generateCSRFToken(tempSessionId);
+
+      fs.readFile(loginPath, 'utf8', (err, data) => {
+        if (err) {
+          res.writeHead(404);
+          res.end('Login page not found');
+          return;
+        }
+
+        // 注入CSRF token到页面
+        const htmlWithCSRF = data.replace(
+          '</head>',
+          `<meta name="csrf-token" content="${csrfToken}"></head>`
+        );
+
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(htmlWithCSRF);
+      });
+      return;
+    }
+
+    // 检查会话验证（对于所有非登录页面）
+    const sessionId = getSessionFromCookie(req);
+    if (!isValidSession(sessionId)) {
+      // 重定向到登录页面
+      res.writeHead(302, { 'Location': '/login' });
+      res.end();
+      return;
+    }
+
     const filePath = req.url === '/' ? path.join(__dirname, '../public/index.html') : path.join(__dirname, '../public', req.url);
     sendFile(res, filePath);
   }
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Server listening on http://localhost:${PORT}`);
+const HOST = process.env.HOST || '0.0.0.0'; // 允许外部访问
+server.listen(PORT, HOST, () => {
+  console.log(`Server listening on http://${HOST}:${PORT}`);
+  console.log(`Local access: http://localhost:${PORT}`);
+  console.log(`Login password: ${ADMIN_PASSWORD}`);
 });
