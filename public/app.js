@@ -114,6 +114,9 @@ document.getElementById('lock-button').addEventListener('click', async () => {
     const res = await postJSON('/api/parameters/unlock', {});
     if (res.error) return showToast(res.error);
   } else {
+    if (state.status !== 'online') {
+      return showToast('小车未在线，无法设置参数');
+    }
     const side = Number(document.getElementById('input-side').value);
     const num = Number(document.getElementById('input-num').value);
     const res = await postJSON('/api/parameters/lock', { side, num });

@@ -199,9 +199,10 @@ main { max-width: 960px; margin: 0 auto; padding: 0 16px 32px; }
 
 #toast {
   position: fixed;
-  bottom: 20px;
   left: 50%;
-  transform: translateX(-50%);
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: min(360px, 90vw);
   background: rgba(0,0,0,0.8);
   color: #fff;
   padding: 10px 16px;
@@ -210,6 +211,7 @@ main { max-width: 960px; margin: 0 auto; padding: 0 16px 32px; }
   pointer-events: none;
   transition: opacity 0.3s ease;
   z-index: 20;
+  text-align: center;
 }
 
 #toast.show { opacity: 1; }
