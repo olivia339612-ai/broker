@@ -1,0 +1,14 @@
+{
+  "name": "broker",
+  "version": "1.0.0",
+  "description": "吊弦位置标记小车服务端前后端实现",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "echo \"No tests configured\""
+  },
+  "keywords": ["mqtt", "railcar", "webapp"],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
