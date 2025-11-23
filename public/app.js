@@ -65,28 +65,28 @@ function updateCarStats() {
 
 function fillParams() {
   const sideInput = document.getElementById('input-side');
-  const unmInput = document.getElementById('input-unm');
+  const numInput = document.getElementById('input-num');
   const lockBtn = document.getElementById('lock-button');
   const locked = state.parameters.locked;
 
   if (!locked && !isEditingParams) {
     sideInput.value = state.parameters.side ?? '';
-    unmInput.value = state.parameters.unm ?? '';
+    numInput.value = state.parameters.num ?? '';
   }
   if (locked) {
     // 强制同步锁定态
     sideInput.value = state.parameters.side ?? '';
-    unmInput.value = state.parameters.unm ?? '';
+    numInput.value = state.parameters.num ?? '';
     isEditingParams = false;
   }
   if (state.parameters.locked) {
     sideInput.disabled = true;
-    unmInput.disabled = true;
+    numInput.disabled = true;
     lockBtn.textContent = '解锁';
     lockBtn.classList.add('secondary');
   } else {
     sideInput.disabled = false;
-    unmInput.disabled = false;
+    numInput.disabled = false;
     lockBtn.textContent = '锁定并发送';
     lockBtn.classList.remove('secondary');
   }
@@ -99,14 +99,14 @@ document.getElementById('lock-button').addEventListener('click', async () => {
     if (res.error) return showToast(res.error);
   } else {
     const side = Number(document.getElementById('input-side').value);
-    const unm = Number(document.getElementById('input-unm').value);
-    const res = await postJSON('/api/parameters/lock', { side, unm });
+    const num = Number(document.getElementById('input-num').value);
+    const res = await postJSON('/api/parameters/lock', { side, num });
     if (res.error) return showToast(res.error);
   }
   await fetchState();
 });
 
-['input-side', 'input-unm'].forEach((id) => {
+['input-side', 'input-num'].forEach((id) => {
   const el = document.getElementById(id);
   el.addEventListener('focus', () => {
     isEditingParams = true;
@@ -176,7 +176,7 @@ function renderTasks() {
     const deltaLabel = task.delta ? `${task.delta.toFixed(2)}m` : '—';
     card.innerHTML = `
       <div class="task-header">跨${task.id}：<span class="task-sub">跨距：${task.span.toFixed(2)}m</span><span class="task-sub">中间吊弦距离：${deltaLabel}</span></div>
-      <div class="task-sub">参数：side=${task.side ?? '—'}cm，unm=${task.unm ?? '—'}</div>
+      <div class="task-sub">参数：侧距=${task.side ?? '—'}cm，总吊弦数=${task.num ?? '—'}</div>
     `;
     if (task.error) {
       const err = document.createElement('div');
@@ -214,11 +214,11 @@ function renderTasks() {
   history.className = 'history';
   history.innerHTML = '<h3>历史任务数据</h3>';
   const table = document.createElement('table');
-  table.innerHTML = '<thead><tr><th>跨号</th><th>跨距(m)</th><th>side(cm)</th><th>unm</th><th>中间吊弦距离(m)</th><th>时间</th></tr></thead>';
+  table.innerHTML = '<thead><tr><th>跨号</th><th>跨距(m)</th><th>侧距(cm)</th><th>总吊弦数</th><th>中间吊弦距离(m)</th><th>时间</th></tr></thead>';
   const tbody = document.createElement('tbody');
   state.tasks.forEach((task) => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${task.id}</td><td>${task.span.toFixed(2)}</td><td>${task.side ?? '—'}</td><td>${task.unm ?? '—'}</td><td>${task.delta ? task.delta.toFixed(2) : '—'}</td><td>${new Date(task.createdAt).toLocaleString()}</td>`;
+    tr.innerHTML = `<td>${task.id}</td><td>${task.span.toFixed(2)}</td><td>${task.side ?? '—'}</td><td>${task.num ?? '—'}</td><td>${task.delta ? task.delta.toFixed(2) : '—'}</td><td>${new Date(task.createdAt).toLocaleString()}</td>`;
     tbody.appendChild(tr);
   });
   table.appendChild(tbody);

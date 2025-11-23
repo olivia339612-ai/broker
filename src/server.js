@@ -177,7 +177,7 @@ class SimpleMQTTClient extends EventEmitter {
 
 const state = {
   status: 'offline',
-  parameters: { side: null, unm: null, locked: false },
+  parameters: { side: null, num: null, locked: false },
   controlState: 'idle',
   car: { spe: 0, dis: '00000000', dn: 0, sn: 0 },
   uptimeStart: null,
@@ -258,19 +258,19 @@ function buildTaskRecord(id, span) {
     id,
     span,
     side: state.parameters.side,
-    unm: state.parameters.unm,
+    num: state.parameters.num,
     delta: null,
     positions: [],
     status: 'done',
     createdAt: new Date().toISOString(),
     error: null
   };
-  if (!state.parameters.locked || state.parameters.side === null || state.parameters.unm === null) {
+  if (!state.parameters.locked || state.parameters.side === null || state.parameters.num === null) {
     record.error = '参数未锁定，无法计算吊弦位置';
     return record;
   }
   const D = state.parameters.side / 100;
-  const n = state.parameters.unm;
+  const n = state.parameters.num;
   if (n < 2) {
     record.error = '跨内总吊弦数无效（需≥2）';
     return record;
@@ -356,13 +356,13 @@ function handleApiRequest(req, res, body) {
   }
   if (req.method === 'POST' && req.url === '/api/parameters/lock') {
     const side = Number(body.side);
-    const unm = Number(body.unm);
-    if (Number.isNaN(side) || side <= 0 || Number.isNaN(unm) || unm < 2) {
-      return jsonResponse(res, 400, { error: '参数无效，请检查 side 与 unm' });
+    const num = Number(body.num ?? body.unm);
+    if (Number.isNaN(side) || side <= 0 || Number.isNaN(num) || num < 2) {
+      return jsonResponse(res, 400, { error: '参数无效，请检查 side 与 num' });
     }
-    state.parameters = { side, unm, locked: true };
-    mqttClient.publish('data', `{side:${side};unm:${unm}}`);
-    addLog(`参数锁定并下发：side=${side}, unm=${unm}`);
+    state.parameters = { side, num, locked: true };
+    mqttClient.publish('data', `{side:${side};num:${num}}`);
+    addLog(`参数锁定并下发：side=${side}, num=${num}`);
     return jsonResponse(res, 200, getStatePayload());
   }
   if (req.method === 'POST' && req.url === '/api/parameters/unlock') {
@@ -429,8 +429,7 @@ const server = http.createServer((req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 8000;
-const HOST = process.env.HOST || '0.0.0.0';
-server.listen(PORT, HOST, () => {
-  console.log(`Server listening on http://${HOST}:${PORT}`);
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`Server listening on http://localhost:${PORT}`);
 });
