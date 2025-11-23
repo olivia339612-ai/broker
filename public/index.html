@@ -18,13 +18,12 @@
       <button data-modal="control-modal">小车控制</button>
       <button data-modal="task-modal">任务数据</button>
       <button data-modal="log-modal">工作日志</button>
-      <button data-modal="mqtt-modal">MQTT 连接</button>
     </section>
 
     <section class="car-stats">
       <div class="stat"><span>车速：</span><strong id="car-speed">0.0 km/h</strong></div>
       <div class="stat"><span>位置：</span><strong id="car-distance">DK000+000.00</strong></div>
-      <div class="stat"><span>开机时间：</span><strong id="car-uptime">00h00m</strong></div>
+        <div class="stat"><span>开机时间：</span><strong id="car-uptime">00时00分00秒</strong></div>
       <div class="stat"><span>已标记吊弦数量：</span><strong id="car-dn">0</strong></div>
       <div class="stat"><span>已标记跨距数量：</span><strong id="car-sn">0</strong></div>
     </section>
@@ -76,36 +75,35 @@
         <button class="close">×</button>
       </div>
       <div class="modal-body" id="log-body"></div>
-    </div>
-  </div>
-
-  <div class="modal" id="mqtt-modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2>MQTT 连接</h2>
-        <button class="close">×</button>
-      </div>
-      <div class="modal-body" id="mqtt-body">
-        <div class="mqtt-row">
-          <span class="pill" id="mqtt-status">未连接</span>
-          <small class="hint">可切换服务器地址 / 端口 / 账号，保存后自动重连</small>
+      <div class="submodal" id="mqtt-submodal">
+        <div class="submodal-content">
+          <div class="submodal-header">
+            <h3>MQTT 连接</h3>
+            <button class="close" id="close-mqtt-sub">×</button>
+          </div>
+          <div class="submodal-body" id="mqtt-body">
+            <div class="mqtt-row">
+              <span class="pill" id="mqtt-status">未连接</span>
+              <small class="hint">可切换服务器地址 / 端口 / 账号，保存后自动重连</small>
+            </div>
+            <label>服务器地址
+              <input type="text" id="mqtt-host" placeholder="例如 127.0.0.1">
+            </label>
+            <label>端口
+              <input type="number" id="mqtt-port" placeholder="默认 1883">
+            </label>
+            <label>用户名（可选）
+              <input type="text" id="mqtt-user" placeholder="用户名">
+            </label>
+            <label>密码（可选）
+              <input type="password" id="mqtt-pass" placeholder="密码">
+            </label>
+            <label>订阅主题（逗号分隔）
+              <input type="text" id="mqtt-topics" placeholder="status,car,task">
+            </label>
+            <button id="mqtt-save" class="primary">保存并重连</button>
+          </div>
         </div>
-        <label>服务器地址
-          <input type="text" id="mqtt-host" placeholder="例如 127.0.0.1">
-        </label>
-        <label>端口
-          <input type="number" id="mqtt-port" placeholder="默认 1883">
-        </label>
-        <label>用户名（可选）
-          <input type="text" id="mqtt-user" placeholder="用户名">
-        </label>
-        <label>密码（可选）
-          <input type="password" id="mqtt-pass" placeholder="密码">
-        </label>
-        <label>订阅主题（逗号分隔）
-          <input type="text" id="mqtt-topics" placeholder="status,car,task">
-        </label>
-        <button id="mqtt-save" class="primary">保存并重连</button>
       </div>
     </div>
   </div>

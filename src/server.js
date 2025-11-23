@@ -276,6 +276,10 @@ function handleCarMessage(payload) {
 function handleTaskMessage(payload) {
   const data = parseKeyValuePayload(payload);
   if (!data.ID || !data.span) return;
+  if (!state.parameters.locked) {
+    addLog('收到跨距数据但参数未锁定，已忽略展示');
+    return;
+  }
   const id = Number(data.ID);
   const span = Number(data.span);
   const record = buildTaskRecord(id, span);
@@ -328,12 +332,13 @@ function formatDistance(dis) {
 }
 
 function formatUptime() {
-  if (!state.uptimeStart || state.status !== 'online') return '00h00m';
+  if (!state.uptimeStart || state.status !== 'online') return '00时00分00秒';
   const diffMs = Date.now() - state.uptimeStart.getTime();
-  const minutes = Math.floor(diffMs / 60000);
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return `${hours.toString().padStart(2, '0')}h${mins.toString().padStart(2, '0')}m`;
+  const seconds = Math.floor(diffMs / 1000);
+  const hours = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  return `${hours.toString().padStart(2, '0')}时${mins.toString().padStart(2, '0')}分${secs.toString().padStart(2, '0')}秒`;
 }
 
 function jsonResponse(res, statusCode, data) {

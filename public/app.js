@@ -3,8 +3,11 @@ const state = { status: 'offline', parameters: {}, controlState: 'idle', car: {}
 const modalButtons = document.querySelectorAll('[data-modal]');
 const modals = document.querySelectorAll('.modal');
 const toastEl = document.getElementById('toast');
+const mqttSubmodal = document.getElementById('mqtt-submodal');
 let isEditingParams = false;
 let lastLogCount = 0;
+let lastTaskSignature = '';
+const taskScrollPositions = {};
 
 modalButtons.forEach((btn) => {
   btn.addEventListener('click', () => openModal(btn.dataset.modal));
@@ -24,7 +27,6 @@ function openModal(id) {
   if (id === 'log-modal') renderLogs();
   if (id === 'control-modal') renderControl();
   if (id === 'params-modal') fillParams();
-  if (id === 'mqtt-modal') loadMqtt();
 }
 
 function showToast(message) {
@@ -45,7 +47,7 @@ async function fetchState() {
     if (document.getElementById('log-modal').style.display === 'flex') renderLogs();
     if (document.getElementById('control-modal').style.display === 'flex') renderControl();
     if (document.getElementById('params-modal').style.display === 'flex') fillParams();
-    if (document.getElementById('mqtt-modal').style.display === 'flex') fillMqtt();
+    if (mqttSubmodal.classList.contains('show')) fillMqtt();
   } catch (err) {
     console.error(err);
   }
@@ -61,7 +63,7 @@ function updateStatus() {
 function updateCarStats() {
   document.getElementById('car-speed').textContent = `${(state.car.spe || 0).toFixed ? state.car.spe.toFixed(1) : state.car.spe || 0} km/h`;
   document.getElementById('car-distance').textContent = state.car.disLabel || 'DK000+000.00';
-  document.getElementById('car-uptime').textContent = state.car.uptime || '00h00m';
+  document.getElementById('car-uptime').textContent = state.car.uptime || '00时00分00秒';
   document.getElementById('car-dn').textContent = state.car.dn ?? 0;
   document.getElementById('car-sn').textContent = state.car.sn ?? 0;
 }
@@ -144,6 +146,17 @@ document.getElementById('mqtt-save').addEventListener('click', async () => {
   showToast('MQTT 配置已保存，正在重连');
 });
 
+document.getElementById('close-mqtt-sub').addEventListener('click', (e) => {
+  e.stopPropagation();
+  mqttSubmodal.classList.remove('show');
+});
+
+mqttSubmodal.addEventListener('click', (e) => {
+  if (e.target === mqttSubmodal) {
+    mqttSubmodal.classList.remove('show');
+  }
+});
+
 async function renderControl() {
   const container = document.getElementById('control-body');
   container.innerHTML = '';
@@ -208,12 +221,24 @@ function fillMqtt() {
 
 function renderTasks() {
   const body = document.getElementById('task-body');
+  const signature = JSON.stringify({
+    tasks: state.tasks.map((t) => ({ id: t.id, span: t.span, delta: t.delta, positions: t.positions, error: t.error })),
+    next: state.nextPendingId
+  });
+
+  if (signature === lastTaskSignature && body.querySelector('.task-card')) return;
+
+  body.querySelectorAll('.scale-line').forEach((line) => {
+    if (line.dataset.taskId) taskScrollPositions[line.dataset.taskId] = line.scrollLeft;
+  });
+
   body.innerHTML = '';
   const hasTasks = Array.isArray(state.tasks) && state.tasks.length > 0;
   const hasPending = Boolean(state.nextPendingId);
 
   if (!hasTasks && !hasPending) {
     body.innerHTML = '<p>任务未开始</p>';
+    lastTaskSignature = signature;
     return;
   }
 
@@ -233,6 +258,7 @@ function renderTasks() {
     } else {
       const line = document.createElement('div');
       line.className = 'scale-line';
+      line.dataset.taskId = task.id;
       const ticks = document.createElement('div');
       ticks.className = 'ticks';
       task.positions.forEach((pos, idx) => {
@@ -243,6 +269,9 @@ function renderTasks() {
       });
       line.appendChild(ticks);
       card.appendChild(line);
+      if (taskScrollPositions[task.id] !== undefined) {
+        line.scrollLeft = taskScrollPositions[task.id];
+      }
     }
     body.appendChild(card);
   });
@@ -271,17 +300,35 @@ function renderTasks() {
   table.appendChild(tbody);
   history.appendChild(table);
   body.appendChild(history);
+
+  lastTaskSignature = signature;
 }
 
 function renderLogs() {
   const body = document.getElementById('log-body');
   if (!state.logs) return;
-  if (state.logs.length === lastLogCount && body.querySelector('.log-list')) return;
-
   const previousList = body.querySelector('.log-list');
   const prevScroll = previousList ? previousList.scrollTop : 0;
 
   body.innerHTML = '';
+
+  const actionRow = document.createElement('div');
+  actionRow.className = 'log-actions';
+  const mqttBtn = document.createElement('button');
+  mqttBtn.className = 'ghost-button';
+  mqttBtn.textContent = 'MQTT 连接';
+  mqttBtn.onclick = () => {
+    mqttSubmodal.classList.add('show');
+    loadMqtt();
+  };
+  const pill = document.createElement('span');
+  pill.id = 'mqtt-status';
+  pill.className = 'pill';
+  pill.textContent = 'MQTT 未连接';
+  actionRow.appendChild(mqttBtn);
+  actionRow.appendChild(pill);
+  body.appendChild(actionRow);
+
   const list = document.createElement('div');
   list.className = 'log-list';
   if (!state.logs || state.logs.length === 0) {
@@ -297,6 +344,7 @@ function renderLogs() {
   body.appendChild(list);
   list.scrollTop = prevScroll;
   lastLogCount = state.logs.length;
+  updateMqttBadge();
 }
 
 async function postJSON(url, data) {

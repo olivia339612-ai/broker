@@ -75,7 +75,7 @@ main { max-width: 960px; margin: 0 auto; padding: 0 16px 32px; }
 }
 
 .stat { color: var(--muted); font-size: 15px; text-align: center; }
-.stat strong { display: block; color: var(--text); margin-top: 6px; font-size: 20px; letter-spacing: 0.2px; }
+.stat strong { display: block; color: var(--text); margin-top: 6px; font-size: 24px; letter-spacing: 0.2px; text-align: center; }
 
 .modal {
   display: none;
@@ -95,6 +95,9 @@ main { max-width: 960px; margin: 0 auto; padding: 0 16px 32px; }
   padding: 16px 20px 20px;
   box-shadow: 0 12px 40px rgba(0,0,0,0.35);
   border: 1px solid rgba(255,255,255,0.08);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  position: relative;
 }
 
 .modal-content.wide { width: min(900px, 100%); }
@@ -150,6 +153,8 @@ main { max-width: 960px; margin: 0 auto; padding: 0 16px 32px; }
 .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,0.08); color: var(--text); font-size: 13px; }
 .pill.online { background: #e6f4ea; color: #1b9b4e; }
 .pill.offline { background: #fbeaea; color: #c0392b; }
+.ghost-button { background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid rgba(255,255,255,0.15); padding: 8px 12px; border-radius: 8px; cursor: pointer; }
+.ghost-button:hover { background: rgba(255,255,255,0.1); }
 .mqtt-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 
 .control-actions { display: flex; gap: 12px; flex-wrap: wrap; }
@@ -187,6 +192,15 @@ main { max-width: 960px; margin: 0 auto; padding: 0 16px 32px; }
 .log-list { max-height: 320px; overflow-y: auto; }
 .log-entry { padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
 .log-entry time { display: block; color: var(--muted); font-size: 12px; }
+.log-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+
+.submodal { position: absolute; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; padding: 12px; }
+.submodal.show { display: flex; }
+.submodal-content { background: var(--card); width: min(520px, 100%); border-radius: 12px; padding: 14px 16px 18px; box-shadow: 0 12px 30px rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.1); max-height: 80vh; overflow-y: auto; }
+.submodal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px; margin-bottom: 10px; }
+.submodal-body label { display: block; margin: 8px 0 10px; color: var(--muted); }
+.submodal-body input { width: 100%; padding: 10px 12px; margin-top: 6px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.03); color: var(--text); }
+
 
 #toast {
   position: fixed;
