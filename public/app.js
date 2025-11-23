@@ -162,10 +162,14 @@ async function renderControl() {
 function renderTasks() {
   const body = document.getElementById('task-body');
   body.innerHTML = '';
-  if (!state.tasks || state.tasks.length === 0) {
+  const hasTasks = Array.isArray(state.tasks) && state.tasks.length > 0;
+  const hasPending = Boolean(state.nextPendingId);
+
+  if (!hasTasks && !hasPending) {
     body.innerHTML = '<p>任务未开始</p>';
     return;
   }
+
   state.tasks.forEach((task) => {
     const card = document.createElement('div');
     card.className = 'task-card';
@@ -196,7 +200,7 @@ function renderTasks() {
     body.appendChild(card);
   });
 
-  if (state.nextPendingId) {
+  if (hasPending) {
     const pending = document.createElement('div');
     pending.className = 'task-card';
     pending.innerHTML = `

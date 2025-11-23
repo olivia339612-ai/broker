@@ -182,6 +182,7 @@ const state = {
   car: { spe: 0, dis: '00000000', dn: 0, sn: 0 },
   uptimeStart: null,
   tasks: [],
+  nextPendingId: null,
   logs: []
 };
 
@@ -249,6 +250,7 @@ function handleTaskMessage(payload) {
   const span = Number(data.span);
   const record = buildTaskRecord(id, span);
   state.tasks.push(record);
+  state.nextPendingId = state.controlState === 'idle' ? null : id + 1;
 }
 
 function buildTaskRecord(id, span) {
@@ -333,7 +335,6 @@ function sendFile(res, filePath) {
 }
 
 function getStatePayload() {
-  const nextPendingId = state.tasks.length > 0 ? state.tasks[state.tasks.length - 1].id + 1 : null;
   return {
     status: state.status,
     parameters: state.parameters,
@@ -344,7 +345,7 @@ function getStatePayload() {
       uptime: formatUptime()
     },
     tasks: state.tasks,
-    nextPendingId,
+    nextPendingId: state.nextPendingId,
     logs: state.logs
   };
 }
@@ -376,6 +377,7 @@ function handleApiRequest(req, res, body) {
     if (!state.parameters.locked) return jsonResponse(res, 400, { error: '参数未锁定' });
     if (state.status !== 'online') return jsonResponse(res, 400, { error: '小车未在线' });
     state.controlState = 'running';
+    state.nextPendingId = state.tasks.length > 0 ? state.tasks[state.tasks.length - 1].id + 1 : 1;
     mqttClient.publish('cmd', '{start}');
     addLog('发送开始命令');
     return jsonResponse(res, 200, getStatePayload());
@@ -388,12 +390,14 @@ function handleApiRequest(req, res, body) {
   }
   if (req.method === 'POST' && req.url === '/api/control/continue') {
     state.controlState = 'running';
+    if (!state.nextPendingId) state.nextPendingId = state.tasks.length > 0 ? state.tasks[state.tasks.length - 1].id + 1 : 1;
     mqttClient.publish('cmd', '{con}');
     addLog('发送继续命令');
     return jsonResponse(res, 200, getStatePayload());
   }
   if (req.method === 'POST' && req.url === '/api/control/over') {
     state.controlState = 'idle';
+    state.nextPendingId = null;
     mqttClient.publish('cmd', '{over}');
     addLog('发送结束命令');
     return jsonResponse(res, 200, getStatePayload());
