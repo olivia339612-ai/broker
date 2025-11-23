@@ -29,6 +29,7 @@ class SimpleMQTTClient extends EventEmitter {
 
   connect() {
     clearTimeout(this.reconnectTimer);
+    this.emit('log', `尝试连接 MQTT：${this.host}:${this.port}`);
     this.socket = net.createConnection({ host: this.host, port: this.port }, () => {
       this.sendConnect();
     });
@@ -52,6 +53,18 @@ class SimpleMQTTClient extends EventEmitter {
       this.reconnectTimer = null;
       this.connect();
     }, 3000);
+  }
+
+  close() {
+    clearTimeout(this.reconnectTimer);
+    clearInterval(this.keepAliveTimer);
+    this.reconnectTimer = null;
+    this.keepAliveTimer = null;
+    if (this.socket) {
+      this.socket.destroy();
+      this.socket = null;
+    }
+    this.connected = false;
   }
 
   sendConnect() {
@@ -195,24 +208,41 @@ function addLog(message) {
   console.log(`[LOG] ${entry.timestamp} ${message}`);
 }
 
-const mqttClient = new SimpleMQTTClient({
-  host: '124.222.86.236',
-  port: 1883,
-  username: 'railcar',
-  password: 'olivia167349@',
-  keepAlive: 60,
-  topics: ['status', 'car', 'task']
-});
+let mqttClient = null;
+let mqttConfig = {
+  host: process.env.MQTT_HOST || '124.222.86.236',
+  port: Number(process.env.MQTT_PORT) || 1883,
+  username: process.env.MQTT_USER || 'railcar',
+  password: process.env.MQTT_PASSWORD || 'olivia167349@',
+  keepAlive: Number(process.env.MQTT_KEEPALIVE) || 60,
+  topics: (process.env.MQTT_TOPICS && process.env.MQTT_TOPICS.split(',')) || ['status', 'car', 'task']
+};
 
-mqttClient.on('log', addLog);
-mqttClient.on('message', (topic, payload) => {
-  addLog(`MQTT message on ${topic}: ${payload}`);
-  if (topic === 'status') handleStatusMessage(payload.trim());
-  else if (topic === 'car') handleCarMessage(payload.trim());
-  else if (topic === 'task') handleTaskMessage(payload.trim());
-});
+function attachMqttClient(client) {
+  client.on('log', addLog);
+  client.on('message', (topic, payload) => {
+    addLog(`MQTT message on ${topic}: ${payload}`);
+    if (topic === 'status') handleStatusMessage(payload.trim());
+    else if (topic === 'car') handleCarMessage(payload.trim());
+    else if (topic === 'task') handleTaskMessage(payload.trim());
+  });
+  client.start();
+}
 
-mqttClient.start();
+function createMqttClient(options) {
+  if (mqttClient) {
+    try {
+      mqttClient.removeAllListeners();
+      mqttClient.close();
+    } catch (err) {
+      addLog(`关闭旧 MQTT 连接出错：${err.message}`);
+    }
+  }
+  mqttClient = new SimpleMQTTClient(options);
+  attachMqttClient(mqttClient);
+}
+
+createMqttClient(mqttConfig);
 
 function handleStatusMessage(payload) {
   if (payload === '{online}') {
@@ -346,12 +376,41 @@ function getStatePayload() {
     },
     tasks: state.tasks,
     nextPendingId: state.nextPendingId,
-    logs: state.logs
+    logs: state.logs,
+    mqtt: {
+      host: mqttConfig.host,
+      port: mqttConfig.port,
+      username: mqttConfig.username,
+      password: mqttConfig.password,
+      topics: mqttConfig.topics,
+      connected: mqttClient ? mqttClient.connected : false
+    }
   };
 }
 
 function handleApiRequest(req, res, body) {
   if (req.method === 'GET' && req.url === '/api/state') {
+    return jsonResponse(res, 200, getStatePayload());
+  }
+  if (req.method === 'GET' && req.url === '/api/mqtt') {
+    return jsonResponse(res, 200, {
+      config: { host: mqttConfig.host, port: mqttConfig.port, username: mqttConfig.username, password: mqttConfig.password, topics: mqttConfig.topics },
+      connected: mqttClient ? mqttClient.connected : false
+    });
+  }
+  if (req.method === 'POST' && req.url === '/api/mqtt') {
+    const host = (body.host || '').trim();
+    const port = Number(body.port);
+    const username = (body.username || '').trim();
+    const password = (body.password || '').trim();
+    let topics = Array.isArray(body.topics) ? body.topics.filter(Boolean) : mqttConfig.topics;
+    if (!topics || topics.length === 0) topics = mqttConfig.topics;
+    if (!host || Number.isNaN(port) || port <= 0) {
+      return jsonResponse(res, 400, { error: 'MQTT 地址或端口无效' });
+    }
+    mqttConfig = { host, port, username, password, keepAlive: mqttConfig.keepAlive, topics };
+    addLog(`切换 MQTT 服务器到 ${host}:${port}`);
+    createMqttClient(mqttConfig);
     return jsonResponse(res, 200, getStatePayload());
   }
   if (req.method === 'POST' && req.url === '/api/parameters/lock') {
@@ -430,7 +489,6 @@ const server = http.createServer((req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || '0.0.0.0';
-server.listen(PORT, HOST, () => {
-  console.log(`Server listening on http://${HOST}:${PORT}`);
+server.listen(PORT, () => {
+  console.log(`Server listening on http://localhost:${PORT}`);
 });

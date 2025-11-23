@@ -1,4 +1,4 @@
-const state = { status: 'offline', parameters: {}, controlState: 'idle', car: {}, tasks: [], nextPendingId: null, logs: [] };
+const state = { status: 'offline', parameters: {}, controlState: 'idle', car: {}, tasks: [], nextPendingId: null, logs: [], mqtt: {} };
 
 const modalButtons = document.querySelectorAll('[data-modal]');
 const modals = document.querySelectorAll('.modal');
@@ -24,6 +24,7 @@ function openModal(id) {
   if (id === 'log-modal') renderLogs();
   if (id === 'control-modal') renderControl();
   if (id === 'params-modal') fillParams();
+  if (id === 'mqtt-modal') loadMqtt();
 }
 
 function showToast(message) {
@@ -39,10 +40,12 @@ async function fetchState() {
     Object.assign(state, data);
     updateStatus();
     updateCarStats();
+    updateMqttBadge();
     if (document.getElementById('task-modal').style.display === 'flex') renderTasks();
     if (document.getElementById('log-modal').style.display === 'flex') renderLogs();
     if (document.getElementById('control-modal').style.display === 'flex') renderControl();
     if (document.getElementById('params-modal').style.display === 'flex') fillParams();
+    if (document.getElementById('mqtt-modal').style.display === 'flex') fillMqtt();
   } catch (err) {
     console.error(err);
   }
@@ -61,6 +64,15 @@ function updateCarStats() {
   document.getElementById('car-uptime').textContent = state.car.uptime || '00h00m';
   document.getElementById('car-dn').textContent = state.car.dn ?? 0;
   document.getElementById('car-sn').textContent = state.car.sn ?? 0;
+}
+
+function updateMqttBadge() {
+  const pill = document.getElementById('mqtt-status');
+  if (!pill) return;
+  const connected = state.mqtt && state.mqtt.connected;
+  pill.textContent = connected ? 'MQTT 已连接' : 'MQTT 未连接';
+  pill.classList.toggle('online', connected);
+  pill.classList.toggle('offline', !connected);
 }
 
 function fillParams() {
@@ -117,6 +129,21 @@ document.getElementById('lock-button').addEventListener('click', async () => {
   });
 });
 
+document.getElementById('mqtt-save').addEventListener('click', async () => {
+  const host = document.getElementById('mqtt-host').value.trim();
+  const port = Number(document.getElementById('mqtt-port').value);
+  const username = document.getElementById('mqtt-user').value;
+  const password = document.getElementById('mqtt-pass').value;
+  const topicsRaw = document.getElementById('mqtt-topics').value || '';
+  const topics = topicsRaw.split(',').map((t) => t.trim()).filter(Boolean);
+  const res = await postJSON('/api/mqtt', { host, port, username, password, topics });
+  if (res.error) return showToast(res.error);
+  Object.assign(state, res);
+  updateMqttBadge();
+  fillMqtt();
+  showToast('MQTT 配置已保存，正在重连');
+});
+
 async function renderControl() {
   const container = document.getElementById('control-body');
   container.innerHTML = '';
@@ -157,6 +184,26 @@ async function renderControl() {
     }));
   }
   container.appendChild(actions);
+}
+
+async function loadMqtt() {
+  try {
+    const res = await fetch('/api/mqtt');
+    const data = await res.json();
+    state.mqtt = { ...data.config, connected: data.connected };
+    fillMqtt();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function fillMqtt() {
+  document.getElementById('mqtt-host').value = state.mqtt.host || '';
+  document.getElementById('mqtt-port').value = state.mqtt.port || '';
+  document.getElementById('mqtt-user').value = state.mqtt.username || '';
+  document.getElementById('mqtt-pass').value = state.mqtt.password || '';
+  document.getElementById('mqtt-topics').value = Array.isArray(state.mqtt.topics) ? state.mqtt.topics.join(',') : 'status,car,task';
+  updateMqttBadge();
 }
 
 function renderTasks() {

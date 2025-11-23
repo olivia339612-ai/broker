@@ -147,6 +147,11 @@ main { max-width: 960px; margin: 0 auto; padding: 0 16px 32px; }
 
 .modal-body .hint { color: var(--muted); font-size: 13px; line-height: 1.5; }
 
+.pill { display: inline-block; padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,0.08); color: var(--text); font-size: 13px; }
+.pill.online { background: #e6f4ea; color: #1b9b4e; }
+.pill.offline { background: #fbeaea; color: #c0392b; }
+.mqtt-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+
 .control-actions { display: flex; gap: 12px; flex-wrap: wrap; }
 .control-actions button { flex: 1; min-width: 120px; }
 
