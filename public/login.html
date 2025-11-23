@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>吊弦位置标记小车 - 登录</title>
+    <title>系统访问</title>
+    <meta name="robots" content="noindex, nofollow, noarchive">
     <style>
         * {
             margin: 0;
@@ -12,21 +13,22 @@
         }
 
         body {
-            font-family: Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            height: 100vh;
+            min-height: 100vh;
             display: flex;
-            justify-content: center;
             align-items: center;
+            justify-content: center;
         }
 
         .login-container {
-            background: white;
+            background: rgba(255, 255, 255, 0.95);
             padding: 40px;
-            border-radius: 15px;
+            border-radius: 12px;
             box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
             width: 100%;
             max-width: 400px;
+            backdrop-filter: blur(10px);
         }
 
         .login-header {
@@ -37,6 +39,7 @@
         .login-header h1 {
             color: #333;
             font-size: 24px;
+            font-weight: 600;
             margin-bottom: 10px;
         }
 
@@ -52,200 +55,200 @@
         .form-group label {
             display: block;
             margin-bottom: 8px;
-            color: #333;
-            font-weight: bold;
+            color: #555;
+            font-weight: 500;
             font-size: 14px;
         }
 
-        .form-group input {
+        .form-input {
             width: 100%;
             padding: 12px 16px;
             border: 2px solid #e1e5e9;
             border-radius: 8px;
             font-size: 16px;
-            transition: border-color 0.3s ease;
+            transition: all 0.3s ease;
+            background-color: #fff;
         }
 
-        .form-group input:focus {
+        .form-input:focus {
             outline: none;
             border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
         .login-btn {
             width: 100%;
-            background: #667eea;
-            color: white;
             padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
             border: none;
             border-radius: 8px;
             font-size: 16px;
-            font-weight: bold;
+            font-weight: 600;
             cursor: pointer;
-            transition: background 0.3s ease;
+            transition: all 0.3s ease;
         }
 
-        .login-btn:hover {
-            background: #5a67d8;
+        .login-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
         }
 
         .login-btn:disabled {
-            background: #ccc;
+            opacity: 0.6;
             cursor: not-allowed;
+            transform: none;
+        }
+
+        .message {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 14px;
+            padding: 10px;
+            border-radius: 6px;
+            display: none;
         }
 
         .error-message {
-            color: #e53e3e;
-            text-align: center;
-            margin-top: 15px;
-            font-size: 14px;
-            display: none;
+            color: #e74c3c;
+            background: #fee;
+            border: 1px solid #fcc;
         }
 
         .success-message {
-            color: #38a169;
-            text-align: center;
-            margin-top: 15px;
-            font-size: 14px;
-            display: none;
+            color: #27ae60;
+            background: #efe;
+            border: 1px solid #cfc;
         }
 
-        .default-password-hint {
-            background: #f7fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
-            padding: 10px;
-            margin-top: 15px;
-            font-size: 12px;
-            color: #4a5568;
+        .info-message {
+            color: #3498db;
+            background: #eef7ff;
+            border: 1px solid #cde;
+        }
+
+        @media (max-width: 480px) {
+            .login-container {
+                margin: 20px;
+                padding: 30px 20px;
+            }
         }
     </style>
 </head>
 <body>
     <div class="login-container">
         <div class="login-header">
-            <h1>吊弦位置标记小车</h1>
+            <h1>系统访问</h1>
             <p>请输入访问密码</p>
         </div>
 
         <form id="loginForm">
             <div class="form-group">
                 <label for="password">密码</label>
-                <input type="password" id="password" name="password" required placeholder="请输入密码" autocomplete="new-password">
+                <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    class="form-input"
+                    required
+                    placeholder="请输入密码"
+                    autocomplete="current-password"
+                    autofocus
+                >
             </div>
 
             <button type="submit" class="login-btn" id="loginBtn">登录</button>
 
-            <div class="error-message" id="errorMessage">
-                密码错误，请重新输入
-            </div>
-
-            <div class="success-message" id="successMessage">
-                登录成功，正在跳转...
-            </div>
-
-          </form>
+            <div id="message" class="message"></div>
+        </form>
     </div>
 
     <script>
         const loginForm = document.getElementById('loginForm');
         const loginBtn = document.getElementById('loginBtn');
-        const errorMessage = document.getElementById('errorMessage');
-        const successMessage = document.getElementById('successMessage');
+        const messageDiv = document.getElementById('message');
+        const passwordInput = document.getElementById('password');
 
-        // 获取CSRF token
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-
-        // 简单的密码强度检查
-        function validatePassword(password) {
-            if (password.length < 1) {
-                return { valid: false, message: '请输入密码' };
-            }
-            if (password.length > 100) {
-                return { valid: false, message: '密码格式错误' };
-            }
-            return { valid: true };
+        // 显示消息
+        function showMessage(text, type) {
+            messageDiv.textContent = text;
+            messageDiv.className = `message ${type}-message`;
+            messageDiv.style.display = 'block';
         }
 
-        loginForm.addEventListener('submit', async (e) => {
+        // 隐藏消息
+        function hideMessage() {
+            messageDiv.style.display = 'none';
+        }
+
+        // 登录处理
+        async function handleLogin(e) {
             e.preventDefault();
 
-            const password = document.getElementById('password').value;
+            const password = passwordInput.value.trim();
 
-            // 客户端验证
-            const validation = validatePassword(password);
-            if (!validation.valid) {
-                showError(validation.message);
+            if (!password) {
+                showMessage('请输入密码', 'error');
                 return;
             }
 
+            // 禁用按钮
             loginBtn.disabled = true;
             loginBtn.textContent = '登录中...';
+            hideMessage();
 
             try {
-                const requestBody = { password };
-
-                // 添加CSRF token（如果存在）
-                if (csrfToken) {
-                    requestBody.csrfToken = csrfToken;
-                }
-
                 const response = await fetch('/api/login', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
                     },
-                    body: JSON.stringify(requestBody)
+                    body: JSON.stringify({ password: password })
                 });
 
                 const result = await response.json();
 
                 if (response.ok && result.success) {
-                    showSuccess('登录成功，正在跳转...');
+                    showMessage('登录成功，正在跳转...', 'success');
+
+                    // 等待一下让用户看到成功消息
                     setTimeout(() => {
                         window.location.href = '/';
-                    }, 1000);
+                    }, 800);
+
                 } else {
-                    showError(result.error || '登录失败');
+                    showMessage(result.error || '登录失败', 'error');
+                    passwordInput.value = '';
+                    passwordInput.focus();
                 }
+
             } catch (error) {
-                showError('网络错误，请稍后重试');
+                console.error('登录错误:', error);
+                showMessage('网络错误，请重试', 'error');
             } finally {
                 loginBtn.disabled = false;
                 loginBtn.textContent = '登录';
             }
-        });
-
-        function showError(message) {
-            errorMessage.textContent = message;
-            errorMessage.style.display = 'block';
-            successMessage.style.display = 'none';
-
-            setTimeout(() => {
-                errorMessage.style.display = 'none';
-            }, 5000);
         }
 
-        function showSuccess(message) {
-            successMessage.textContent = message;
-            successMessage.style.display = 'block';
-            errorMessage.style.display = 'none';
-        }
+        // 绑定事件
+        loginForm.addEventListener('submit', handleLogin);
 
-        // 回车键提交
-        document.getElementById('password').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                loginForm.dispatchEvent(new Event('submit'));
-            }
-        });
+        // 输入时隐藏错误消息
+        passwordInput.addEventListener('input', hideMessage);
 
-        // 清除密码字段（页面加载时）
+        // 页面加载时清空密码
         window.addEventListener('load', () => {
-            document.getElementById('password').value = '';
+            passwordInput.value = '';
+            passwordInput.focus();
         });
 
-        // 防止自动填充（虽然现代浏览器会忽略这个）
-        document.getElementById('password').setAttribute('autocomplete', 'new-password');
+        // 防止页面被缓存
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+                registrations.forEach(registration => registration.unregister());
+            });
+        }
     </script>
 </body>
 </html>

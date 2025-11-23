@@ -199,6 +199,93 @@ const state = {
   logs: []
 };
 
+// 认证相关配置
+const AUTH_CONFIG = {
+  password: process.env.ADMIN_PASSWORD || 'hbj', // 默认密码，支持环境变量覆盖
+  sessions: new Map(), // 存储会话
+  sessionTimeout: 24 * 60 * 60 * 1000, // 24小时超时
+  maxAttempts: 5, // 最大尝试次数
+  attemptTimeout: 15 * 60 * 1000 // 15分钟锁定时间
+};
+
+// 记录登录尝试
+const loginAttempts = new Map();
+
+// 生成随机会话ID
+function generateSessionId() {
+  return require('crypto').randomBytes(32).toString('hex');
+}
+
+// 验证会话
+function validateSession(sessionId) {
+  if (!sessionId) return false;
+
+  const session = AUTH_CONFIG.sessions.get(sessionId);
+  if (!session) return false;
+
+  // 检查会话是否过期
+  if (Date.now() - session.createdAt > AUTH_CONFIG.sessionTimeout) {
+    AUTH_CONFIG.sessions.delete(sessionId);
+    return false;
+  }
+
+  // 更新最后访问时间
+  session.lastAccess = Date.now();
+  return true;
+}
+
+// 创建新会话
+function createSession() {
+  const sessionId = generateSessionId();
+  AUTH_CONFIG.sessions.set(sessionId, {
+    createdAt: Date.now(),
+    lastAccess: Date.now()
+  });
+
+  // 清理过期会话
+  cleanupExpiredSessions();
+
+  return sessionId;
+}
+
+// 清理过期会话
+function cleanupExpiredSessions() {
+  const now = Date.now();
+  for (const [sessionId, session] of AUTH_CONFIG.sessions.entries()) {
+    if (now - session.createdAt > AUTH_CONFIG.sessionTimeout) {
+      AUTH_CONFIG.sessions.delete(sessionId);
+    }
+  }
+}
+
+// 检查IP是否被锁定
+function isIPLocked(ip) {
+  const attempts = loginAttempts.get(ip);
+  if (!attempts) return false;
+
+  // 如果超过最大尝试次数且在锁定时间内
+  if (attempts.count >= AUTH_CONFIG.maxAttempts &&
+      Date.now() - attempts.lastAttempt < AUTH_CONFIG.attemptTimeout) {
+    return true;
+  }
+
+  // 重置过期记录
+  if (Date.now() - attempts.lastAttempt > AUTH_CONFIG.attemptTimeout) {
+    loginAttempts.delete(ip);
+    return false;
+  }
+
+  return false;
+}
+
+// 记录登录失败
+function recordFailedAttempt(ip) {
+  const attempts = loginAttempts.get(ip) || { count: 0, lastAttempt: 0 };
+  attempts.count++;
+  attempts.lastAttempt = Date.now();
+  loginAttempts.set(ip, attempts);
+}
+
 const MAX_LOGS = 200;
 
 function addLog(message) {
@@ -393,7 +480,100 @@ function getStatePayload() {
   };
 }
 
+// 认证中间件
+function requireAuth(req, res) {
+  const sessionId = req.headers.cookie?.match(/session=([^;]+)/)?.[1];
+
+  if (!sessionId || !validateSession(sessionId)) {
+    jsonResponse(res, 401, { error: '需要登录', requiresAuth: true });
+    return false;
+  }
+  return true;
+}
+
+// 获取客户端IP
+function getClientIP(req) {
+  return req.headers['x-forwarded-for']?.split(',')[0] ||
+         req.connection?.remoteAddress ||
+         req.socket?.remoteAddress ||
+         req.connection?.socket?.remoteAddress ||
+         '127.0.0.1';
+}
+
 function handleApiRequest(req, res, body) {
+  // 登录接口（不需要认证）
+  if (req.method === 'POST' && req.url === '/api/login') {
+    const ip = getClientIP(req);
+    const userAgent = req.headers['user-agent'] || 'unknown';
+
+    addLog(`登录请求 - IP: ${ip}, UA: ${userAgent.substring(0, 100)}`);
+
+    // 检查IP是否被锁定
+    if (isIPLocked(ip)) {
+      addLog(`IP被锁定: ${ip}`);
+      return jsonResponse(res, 429, { error: '登录尝试次数过多，请15分钟后再试' });
+    }
+
+    // 检查蜜罐字段（防止爬虫）
+    if (body.username) {
+      addLog(`检测到爬虫行为，IP: ${ip}`);
+      return jsonResponse(res, 403, { error: '访问被拒绝' });
+    }
+
+    const password = (body.password || '').trim().toLowerCase();
+    addLog(`密码验证尝试 - IP: ${ip}, 密码长度: ${password.length}`);
+
+    // 验证密码（支持hbj和HBJ）
+    if (password === 'hbj') {
+      // 登录成功，创建会话
+      const sessionId = createSession();
+      addLog(`创建会话: ${sessionId.substring(0, 16)}...`);
+
+      // 清除失败记录
+      loginAttempts.delete(ip);
+
+      // 设置cookie（HTTP环境下移除Secure和SameSite=Strict）
+      const cookieOptions = [
+        `session=${sessionId}`,
+        'HttpOnly',
+        'SameSite=Lax',
+        `Max-Age=${Math.floor(AUTH_CONFIG.sessionTimeout/1000)}`,
+        'Path=/'
+      ].join('; ');
+
+      res.setHeader('Set-Cookie', cookieOptions);
+      addLog(`设置Cookie: ${cookieOptions}`);
+
+      addLog(`用户登录成功，IP: ${ip}`);
+      return jsonResponse(res, 200, { success: true, message: '登录成功' });
+    } else {
+      // 登录失败，记录尝试
+      recordFailedAttempt(ip);
+      addLog(`登录失败，IP: ${ip}，密码: ${password ? '***' : '空'}`);
+      return jsonResponse(res, 401, { error: '密码错误' });
+    }
+  }
+
+  // 登出接口
+  if (req.method === 'POST' && req.url === '/api/logout') {
+    const sessionId = req.headers.cookie?.match(/session=([^;]+)/)?.[1];
+    if (sessionId) {
+      AUTH_CONFIG.sessions.delete(sessionId);
+    }
+
+    // 清除cookie
+    res.setHeader('Set-Cookie', 'session=; HttpOnly; SameSite=Lax; Max-Age=0; Path=/');
+
+    return jsonResponse(res, 200, { success: true, message: '已登出' });
+  }
+
+  // 其他API接口需要认证
+  if (!req.url.startsWith('/api/') || req.url === '/api/login' || req.url === '/api/logout') {
+    // 非API请求，继续处理
+  } else if (!requireAuth(req, res)) {
+    return; // 认证失败，已返回响应
+  }
+
   if (req.method === 'GET' && req.url === '/api/state') {
     return jsonResponse(res, 200, getStatePayload());
   }
@@ -425,7 +605,7 @@ function handleApiRequest(req, res, body) {
     const side = Number(body.side);
     const num = Number(body.num ?? body.unm);
     if (Number.isNaN(side) || side <= 0 || Number.isNaN(num) || num < 2) {
-      return jsonResponse(res, 400, { error: '参数无效，请检查 side 与 num' });
+      return jsonResponse(res, 400, { error: '参数无效，请检查' });
     }
     state.parameters = { side, num, locked: true };
     mqttClient.publish('data', `{side:${side};num:${num}}`);
@@ -473,11 +653,17 @@ function handleApiRequest(req, res, body) {
 }
 
 const server = http.createServer((req, res) => {
+  // 添加安全头部
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+
   if (req.url.startsWith('/api/')) {
     let body = '';
     req.on('data', (chunk) => {
       body += chunk;
-      if (body.length > 1e6) req.connection.destroy();
+      if (body.length > 1e6) req.connection?.destroy?.();
     });
     req.on('end', () => {
       let parsed = {};
@@ -491,12 +677,30 @@ const server = http.createServer((req, res) => {
       handleApiRequest(req, res, parsed);
     });
   } else {
+    // 静态文件请求，需要认证（除了登录页面）
+    const sessionId = req.headers.cookie?.match(/session=([^;]+)/)?.[1];
+
+    // 登录页面和API不需要认证检查
+    if (req.url === '/login.html' || req.url === '/login') {
+      const filePath = path.join(__dirname, '../public/login.html');
+      sendFile(res, filePath);
+      return;
+    }
+
+    // 检查是否已登录
+    if (!sessionId || !validateSession(sessionId)) {
+      // 重定向到登录页面
+      res.writeHead(302, { 'Location': '/login.html' });
+      res.end();
+      return;
+    }
+
     const filePath = req.url === '/' ? path.join(__dirname, '../public/index.html') : path.join(__dirname, '../public', req.url);
     sendFile(res, filePath);
   }
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Server listening on http://localhost:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server listening on http://0.0.0.0:${PORT}`);
 });
