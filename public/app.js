@@ -3,7 +3,6 @@ const state = { status: 'offline', parameters: {}, controlState: 'idle', car: {}
 const modalButtons = document.querySelectorAll('[data-modal]');
 const modals = document.querySelectorAll('.modal');
 const toastEl = document.getElementById('toast');
-const mqttSubmodal = document.getElementById('mqtt-submodal');
 let isEditingParams = false;
 let lastLogCount = 0;
 let lastTaskSignature = '';
@@ -27,6 +26,7 @@ function openModal(id) {
   if (id === 'log-modal') renderLogs();
   if (id === 'control-modal') renderControl();
   if (id === 'params-modal') fillParams();
+  if (id === 'mqtt-modal') { loadMqtt(); fillMqtt(); }
 }
 
 function showToast(message) {
@@ -47,7 +47,7 @@ async function fetchState() {
     if (document.getElementById('log-modal').style.display === 'flex') renderLogs();
     if (document.getElementById('control-modal').style.display === 'flex') renderControl();
     if (document.getElementById('params-modal').style.display === 'flex') fillParams();
-    if (mqttSubmodal.classList.contains('show')) fillMqtt();
+    if (document.getElementById('mqtt-modal').style.display === 'flex') fillMqtt();
   } catch (err) {
     console.error(err);
   }
@@ -69,12 +69,14 @@ function updateCarStats() {
 }
 
 function updateMqttBadge() {
-  const pill = document.getElementById('mqtt-status');
-  if (!pill) return;
+  const pills = document.querySelectorAll('[data-mqtt-pill]');
+  if (!pills.length) return;
   const connected = state.mqtt && state.mqtt.connected;
-  pill.textContent = connected ? 'MQTT 已连接' : 'MQTT 未连接';
-  pill.classList.toggle('online', connected);
-  pill.classList.toggle('offline', !connected);
+  pills.forEach((pill) => {
+    pill.textContent = connected ? 'MQTT 已连接' : 'MQTT 未连接';
+    pill.classList.toggle('online', connected);
+    pill.classList.toggle('offline', !connected);
+  });
 }
 
 function fillParams() {
@@ -144,17 +146,6 @@ document.getElementById('mqtt-save').addEventListener('click', async () => {
   updateMqttBadge();
   fillMqtt();
   showToast('MQTT 配置已保存，正在重连');
-});
-
-document.getElementById('close-mqtt-sub').addEventListener('click', (e) => {
-  e.stopPropagation();
-  mqttSubmodal.classList.remove('show');
-});
-
-mqttSubmodal.addEventListener('click', (e) => {
-  if (e.target === mqttSubmodal) {
-    mqttSubmodal.classList.remove('show');
-  }
 });
 
 async function renderControl() {
@@ -318,11 +309,10 @@ function renderLogs() {
   mqttBtn.className = 'ghost-button';
   mqttBtn.textContent = 'MQTT 连接';
   mqttBtn.onclick = () => {
-    mqttSubmodal.classList.add('show');
-    loadMqtt();
+    openModal('mqtt-modal');
   };
   const pill = document.createElement('span');
-  pill.id = 'mqtt-status';
+  pill.dataset.mqttPill = 'true';
   pill.className = 'pill';
   pill.textContent = 'MQTT 未连接';
   actionRow.appendChild(mqttBtn);
