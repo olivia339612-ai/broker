@@ -20,6 +20,7 @@ class SimpleMQTTClient extends EventEmitter {
     this.keepAliveTimer = null;
     this.reconnectTimer = null;
     this.topics = options.topics || [];
+    this.lastPingLog = 0;
   }
 
   start() {
@@ -119,7 +120,11 @@ class SimpleMQTTClient extends EventEmitter {
         // PUBLISH
         this.parsePublish(packet, lenBytes);
       } else if (packetType === 13) {
-        this.emit('log', 'MQTT ping response');
+        const now = Date.now();
+        if (now - this.lastPingLog > 60000) {
+          this.lastPingLog = now;
+          this.emit('log', 'MQTT ping response（连接正常）');
+        }
       }
     }
   }

@@ -3,6 +3,8 @@ const state = { status: 'offline', parameters: {}, controlState: 'idle', car: {}
 const modalButtons = document.querySelectorAll('[data-modal]');
 const modals = document.querySelectorAll('.modal');
 const toastEl = document.getElementById('toast');
+let isEditingParams = false;
+let lastLogCount = 0;
 
 modalButtons.forEach((btn) => {
   btn.addEventListener('click', () => openModal(btn.dataset.modal));
@@ -65,8 +67,18 @@ function fillParams() {
   const sideInput = document.getElementById('input-side');
   const unmInput = document.getElementById('input-unm');
   const lockBtn = document.getElementById('lock-button');
-  sideInput.value = state.parameters.side ?? '';
-  unmInput.value = state.parameters.unm ?? '';
+  const locked = state.parameters.locked;
+
+  if (!locked && !isEditingParams) {
+    sideInput.value = state.parameters.side ?? '';
+    unmInput.value = state.parameters.unm ?? '';
+  }
+  if (locked) {
+    // 强制同步锁定态
+    sideInput.value = state.parameters.side ?? '';
+    unmInput.value = state.parameters.unm ?? '';
+    isEditingParams = false;
+  }
   if (state.parameters.locked) {
     sideInput.disabled = true;
     unmInput.disabled = true;
@@ -92,6 +104,17 @@ document.getElementById('lock-button').addEventListener('click', async () => {
     if (res.error) return showToast(res.error);
   }
   await fetchState();
+});
+
+['input-side', 'input-unm'].forEach((id) => {
+  const el = document.getElementById(id);
+  el.addEventListener('focus', () => {
+    isEditingParams = true;
+  });
+  el.addEventListener('blur', () => {
+    // 离开输入框时允许下一次轮询同步最新数据
+    isEditingParams = false;
+  });
 });
 
 async function renderControl() {
@@ -201,6 +224,12 @@ function renderTasks() {
 
 function renderLogs() {
   const body = document.getElementById('log-body');
+  if (!state.logs) return;
+  if (state.logs.length === lastLogCount && body.querySelector('.log-list')) return;
+
+  const previousList = body.querySelector('.log-list');
+  const prevScroll = previousList ? previousList.scrollTop : 0;
+
   body.innerHTML = '';
   const list = document.createElement('div');
   list.className = 'log-list';
@@ -215,6 +244,8 @@ function renderLogs() {
     });
   }
   body.appendChild(list);
+  list.scrollTop = prevScroll;
+  lastLogCount = state.logs.length;
 }
 
 async function postJSON(url, data) {
